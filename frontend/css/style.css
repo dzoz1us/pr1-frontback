@@ -1,0 +1,125 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.page-title {
+  text-align: center;
+  color: #333;
+  margin: 40px 0;
+  font-size: 2.5rem;
+  position: relative;
+}
+.page-title:after {
+  content: "";
+  display: block;
+  width: 100px;
+  height: 4px;
+  background: #ff6b6b;
+  margin: 15px auto;
+  border-radius: 2px;
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 30px;
+  padding: 20px;
+}
+
+.product-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+.product-card__image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-bottom: 3px solid #ff6b6b;
+}
+.product-card__title {
+  font-size: 1.3rem;
+  color: #333;
+  margin: 15px 15px 10px;
+  font-weight: 600;
+}
+.product-card__description {
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0 15px 15px;
+  line-height: 1.5;
+  flex-grow: 1;
+}
+.product-card__price {
+  font-size: 1.5rem;
+  color: #ff6b6b;
+  font-weight: bold;
+  margin: 0 15px 15px;
+}
+.product-card__button {
+  background-color: #ff6b6b;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+.product-card__button:hover {
+  background-color: #ff3838;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+.product-card__button:active {
+  transform: translateY(0);
+}
+.product-card__button {
+  margin: 0 15px 20px;
+  text-align: center;
+}
+.product-card--sale {
+  border: 2px solid #4ecdc4;
+  position: relative;
+}
+.product-card--sale:before {
+  content: "SALE";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #4ecdc4;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/*# sourceMappingURL=style.css.map */
