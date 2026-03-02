@@ -1,0 +1,13 @@
+.products-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.empty {
+    text-align: center;
+    padding: 40px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    color: #666;
+}
