@@ -42,3 +42,12 @@
 
 ## 2.5) Подробный прогноз для Екатеринбурга
 ![](screenshots/pr3-screen4.5.png)
+
+
+# Практика 4
+## Запускается и работает корректно
+![](screenshots/pr4-screen1.png)
+
+
+## Вид приложения
+![](screenshots/pr4-screen2.png)
