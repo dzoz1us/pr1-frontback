@@ -51,3 +51,24 @@
 
 ## Вид приложения
 ![](screenshots/pr4-screen2.png)
+
+
+
+# Практика 5 
+## Добавление товара POST api/products
+![](screenshots/pr5-screen1.png)
+
+
+
+## Результат добавления товара
+![](screenshots/pr5-screen2.png)
+
+
+
+## Схема Product
+![](screenshots/pr5-screen3.png)
+
+
+
+## Получение товара по ID
+![](screenshots/pr5-screen4.png)
