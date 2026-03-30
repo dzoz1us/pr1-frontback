@@ -1,0 +1,351 @@
+/* ============================================
+   Products Page - Modern Music Store Design
+   ============================================ */
+
+/* Общие переменные */
+:root {
+    --primary: #8B5CF6;
+    --primary-dark: #7C3AED;
+    --secondary: #EC489A;
+    --dark: #1F2937;
+    --darker: #111827;
+    --light: #F9FAFB;
+    --gray: #6B7280;
+    --success: #10B981;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --gradient: linear-gradient(135deg, #8B5CF6 0%, #EC489A 100%);
+    --gradient-dark: linear-gradient(135deg, #7C3AED 0%, #DB2777 100%);
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+/* Анимированный фон */
+.products-page {
+    min-height: 100vh;
+    background: 
+        radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.1) 0%, transparent 50%);
+    position: relative;
+    overflow-x: hidden;
+}
+
+.products-page::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 8px);
+    pointer-events: none;
+}
+
+/* Контейнер */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Хедер */
+.header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-md);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.5px;
+}
+
+.logo-icon {
+    font-size: 2rem;
+    animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* Пользовательское меню */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: var(--light);
+    padding: 8px 20px;
+    border-radius: 100px;
+    box-shadow: var(--shadow-sm);
+}
+
+.user-greeting {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--dark);
+    font-weight: 500;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background: var(--gradient);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+
+.logout-btn {
+    background: none;
+    border: none;
+    color: var(--gray);
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+}
+
+.logout-btn:hover {
+    background: var(--danger);
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* Основной контент */
+.main {
+    padding: 48px 0 80px;
+}
+
+/* Тулбар */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.toolbar h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    position: relative;
+    display: inline-block;
+}
+
+.toolbar h2::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: var(--gradient);
+    border-radius: 3px;
+}
+
+.btn-primary {
+    background: var(--gradient);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 100px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s;
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-xl);
+    background: var(--gradient-dark);
+}
+
+/* Сетка товаров */
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 30px;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Состояния загрузки и пустого списка */
+.loading, .empty {
+    text-align: center;
+    padding: 80px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    color: var(--gray);
+    font-size: 1.1rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.loading::before {
+    content: '🎵';
+    display: block;
+    font-size: 3rem;
+    margin-bottom: 16px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.empty::before {
+    content: '🎸';
+    display: block;
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+/* Футер */
+.footer {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 60px;
+}
+
+.footer-content {
+    text-align: center;
+    padding: 24px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 16px;
+    }
+    
+    .toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .products-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+    
+    .toolbar h2 {
+        font-size: 1.5rem;
+    }
+    
+    .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .user-info {
+        width: 100%;
+        justify-content: center;
+    }
+    /* Кнопка администратора */
+    .admin-btn {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 40px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        transition: all 0.3s;
+        margin-left: 12px;
+    }
+
+    .admin-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    @media (max-width: 768px) {
+        .admin-btn {
+            margin-left: 0;
+            margin-top: 8px;
+        }
+        
+        .user-info {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+    }
+}
