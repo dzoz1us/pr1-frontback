@@ -70,5 +70,21 @@
 
 
 
-## Получение товара по ID
-![](screenshots/pr5-screen4.png.png)
+# Практика 7
+## Регистрация нового пользователя
+![](screenshots/pr7-screen1.png)
+
+
+
+## Вывод
+![](screenshots/pr7-screen2.png)
+
+
+
+## Вход в систему
+![](screenshots/pr7-screen3.png)
+
+
+
+## Вывод
+![](screenshots/pr7-screen4.png)
