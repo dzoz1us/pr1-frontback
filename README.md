@@ -88,3 +88,29 @@
 
 ## Вывод
 ![](screenshots/pr7-screen4.png)
+
+
+
+# Практика 9
+## Регистрация пользователя
+![](screenshots/pr8-screen1.png)
+
+
+
+## Вывод
+![](screenshots/pr8-screen2.png)
+
+
+
+## Вход в систему (возвращает JWT токен)
+![](screenshots/pr8-screen3.png)
+
+
+
+## JWT токен
+![](screenshots/pr8-screen4.png)
+
+
+
+## Получение информации (c JWT)
+![](screenshots/pr8-screen5.png)
