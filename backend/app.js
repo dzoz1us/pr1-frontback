@@ -1,7 +1,7 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');  // НОВАЯ БИБЛИОТЕКА
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
 
@@ -12,29 +12,46 @@ const swaggerUi = require('swagger-ui-express');
 const app = express();
 const port = 3000;
 
-// Секретный ключ для подписи JWT (в реальном проекте хранить в .env)
-const JWT_SECRET = 'music_store_secret_key_2024';
-const ACCESS_EXPIRES_IN = '15m';  // Токен живет 15 минут
+// ===========================================
+// КОНФИГУРАЦИЯ JWT
+// ===========================================
 
-// Настройка CORS для React-клиента
+// Секретные ключи (в реальном проекте хранить в .env)
+const ACCESS_SECRET = 'music_store_access_secret_2024';
+const REFRESH_SECRET = 'music_store_refresh_secret_2024';
+
+// Время жизни токенов
+const ACCESS_EXPIRES_IN = '15m';   // Access-токен живет 15 минут
+const REFRESH_EXPIRES_IN = '7d';   // Refresh-токен живет 7 дней
+
+// ===========================================
+// ХРАНИЛИЩЕ REFRESH-ТОКЕНОВ
+// ===========================================
+// В реальном проекте хранить в базе данных
+const refreshTokens = new Set();
+
+// ===========================================
+// MIDDLEWARE
+// ===========================================
+
+// Настройка CORS
 app.use(cors({
     origin: "http://localhost:3001",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// Middleware для парсинга JSON
 app.use(express.json());
-
-// Middleware для статических файлов из папки frontend
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Middleware для логирования запросов
+// Логирование запросов
 app.use((req, res, next) => {
     res.on('finish', () => {
         console.log(`[${new Date().toISOString()}] [${req.method}] ${res.statusCode} ${req.path}`);
         if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-            console.log('Body:', req.body);
+            if (req.body && !req.body.password) {
+                console.log('Body:', req.body);
+            }
         }
     });
     next();
@@ -44,14 +61,14 @@ app.use((req, res, next) => {
 // ДАННЫЕ
 // ===========================================
 
-// Пользователи (для аутентификации)
+// Пользователи
 let users = [
     {
         id: nanoid(6),
         email: 'admin@musicstore.com',
         first_name: 'Admin',
         last_name: 'User',
-        hashedPassword: '$2b$10$oIsc48/BeRH37Qsl89eco.rlRHtcvVLxAxuKPPrAb4QB/lkYPc1W'  // Будет заполнено после генерации хеша
+        hashedPassword: '$2b$10$4nkEW/2p1Wdl9/zf7aJdv.J8e/9Tk32DQ0.QiM8batR4lNutAh876'  // Будет заполнено после генерации
     }
 ];
 
@@ -130,13 +147,12 @@ let products = [
 ];
 
 // ===========================================
-// ФУНКЦИИ ДЛЯ РАБОТЫ С ПАРОЛЯМИ
+// ФУНКЦИИ
 // ===========================================
 
 // Хеширование пароля
 async function hashPassword(password) {
-    const rounds = 10;
-    return bcrypt.hash(password, rounds);
+    return bcrypt.hash(password, 10);
 }
 
 // Проверка пароля
@@ -144,16 +160,43 @@ async function verifyPassword(password, hashedPassword) {
     return bcrypt.compare(password, hashedPassword);
 }
 
-// Функция для поиска пользователя по email
-function findUserByEmail(email, res) {
-    const user = users.find(u => u.email === email);
-    if (!user) {
-        return null;
-    }
-    return user;
+// Генерация Access-токена
+function generateAccessToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name
+        },
+        ACCESS_SECRET,
+        { expiresIn: ACCESS_EXPIRES_IN }
+    );
 }
 
-// Функция для поиска товара по ID
+// Генерация Refresh-токена
+function generateRefreshToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            email: user.email
+        },
+        REFRESH_SECRET,
+        { expiresIn: REFRESH_EXPIRES_IN }
+    );
+}
+
+// Поиск пользователя по email
+function findUserByEmail(email) {
+    return users.find(u => u.email === email);
+}
+
+// Поиск пользователя по ID
+function findUserById(id) {
+    return users.find(u => u.id === id);
+}
+
+// Поиск товара по ID
 function findProductOr404(id, res) {
     const product = products.find(p => p.id == id);
     if (!product) {
@@ -164,13 +207,12 @@ function findProductOr404(id, res) {
 }
 
 // ===========================================
-// МИДДЛВЭР ДЛЯ ПРОВЕРКИ JWT ТОКЕНА
+// МИДДЛВЭР ДЛЯ ПРОВЕРКИ ACCESS-ТОКЕНА
 // ===========================================
 
 function authMiddleware(req, res, next) {
     const header = req.headers.authorization || "";
 
-    // Ожидаем формат: Bearer <token>
     const [scheme, token] = header.split(" ");
 
     if (scheme !== "Bearer" || !token) {
@@ -180,18 +222,14 @@ function authMiddleware(req, res, next) {
     }
 
     try {
-        const payload = jwt.verify(token, JWT_SECRET);
-        // Сохраняем данные токена в req для использования в обработчиках
-        req.user = payload; // { sub, email, first_name, last_name, iat, exp }
+        const payload = jwt.verify(token, ACCESS_SECRET);
+        req.user = payload;
         next();
     } catch (err) {
         if (err.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: "Token has expired" });
+            return res.status(401).json({ error: "Access token expired" });
         }
-        if (err.name === 'JsonWebTokenError') {
-            return res.status(401).json({ error: "Invalid token" });
-        }
-        return res.status(401).json({ error: "Invalid or expired token" });
+        return res.status(401).json({ error: "Invalid access token" });
     }
 }
 
@@ -203,13 +241,9 @@ const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'Music Store API with JWT Authentication',
-            version: '2.0.0',
-            description: 'API для музыкального магазина с JWT аутентификацией',
-            contact: {
-                name: 'Разработчик',
-                email: 'developer@musicstore.com'
-            }
+            title: 'Music Store API with Refresh Tokens',
+            version: '3.0.0',
+            description: 'API для музыкального магазина с JWT и refresh-токенами'
         },
         servers: [
             {
@@ -218,14 +252,8 @@ const swaggerOptions = {
             }
         ],
         tags: [
-            {
-                name: 'Auth',
-                description: 'Регистрация, вход и получение информации о пользователе'
-            },
-            {
-                name: 'Products',
-                description: 'Управление товарами'
-            }
+            { name: 'Auth', description: 'Аутентификация' },
+            { name: 'Products', description: 'Управление товарами' }
         ],
         components: {
             securitySchemes: {
@@ -236,11 +264,7 @@ const swaggerOptions = {
                 }
             }
         },
-        security: [
-            {
-                bearerAuth: []
-            }
-        ]
+        security: [{ bearerAuth: [] }]
     },
     apis: ['./app.js'],
 };
@@ -248,7 +272,7 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
-    customSiteTitle: 'Music Store API with JWT'
+    customSiteTitle: 'Music Store API with Refresh Tokens'
 }));
 
 // ===========================================
@@ -261,72 +285,34 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *   schemas:
  *     User:
  *       type: object
- *       required:
- *         - email
- *         - first_name
- *         - last_name
- *         - password
  *       properties:
- *         id:
- *           type: string
- *           description: Уникальный ID пользователя
- *           example: "abc123"
- *         email:
- *           type: string
- *           format: email
- *           description: Email пользователя (логин)
- *           example: "user@example.com"
- *         first_name:
- *           type: string
- *           description: Имя
- *           example: "Иван"
- *         last_name:
- *           type: string
- *           description: Фамилия
- *           example: "Петров"
+ *         id: { type: string, example: "abc123" }
+ *         email: { type: string, example: "user@example.com" }
+ *         first_name: { type: string, example: "Иван" }
+ *         last_name: { type: string, example: "Петров" }
+ *     AuthResponse:
+ *       type: object
+ *       properties:
+ *         accessToken: { type: string, example: "eyJhbGciOiJIUzI1NiIs..." }
+ *         refreshToken: { type: string, example: "eyJhbGciOiJIUzI1NiIs..." }
+ *     RefreshRequest:
+ *       type: object
+ *       required:
+ *         - refreshToken
+ *       properties:
+ *         refreshToken: { type: string, example: "eyJhbGciOiJIUzI1NiIs..." }
  *     Product:
  *       type: object
- *       required:
- *         - title
- *         - price
  *       properties:
- *         id:
- *           type: string
- *           description: Уникальный ID товара
- *           example: "xyz789"
- *         title:
- *           type: string
- *           description: Название товара
- *           example: "Fender Stratocaster"
- *         category:
- *           type: string
- *           description: Категория
- *           example: "Гитары"
- *         description:
- *           type: string
- *           description: Описание
- *           example: "Электрогитара"
- *         price:
- *           type: number
- *           description: Цена
- *           example: 89990
- *     LoginResponse:
- *       type: object
- *       properties:
- *         accessToken:
- *           type: string
- *           description: JWT токен доступа
- *           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *     Error:
- *       type: object
- *       properties:
- *         error:
- *           type: string
- *           example: "Error message"
+ *         id: { type: string, example: "xyz789" }
+ *         title: { type: string, example: "Fender Stratocaster" }
+ *         category: { type: string, example: "Гитары" }
+ *         description: { type: string, example: "Электрогитара" }
+ *         price: { type: number, example: 89990 }
  */
 
 // ===========================================
-// АУТЕНТИФИКАЦИЯ (с JWT)
+// АУТЕНТИФИКАЦИЯ
 // ===========================================
 
 /**
@@ -342,51 +328,32 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - email
- *               - first_name
- *               - last_name
- *               - password
+ *             required: [email, first_name, last_name, password]
  *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "ivan@example.com"
- *               first_name:
- *                 type: string
- *                 example: "Иван"
- *               last_name:
- *                 type: string
- *                 example: "Петров"
- *               password:
- *                 type: string
- *                 example: "qwerty123"
+ *               email: { type: string, example: "user@example.com" }
+ *               first_name: { type: string, example: "Иван" }
+ *               last_name: { type: string, example: "Петров" }
+ *               password: { type: string, example: "qwerty123" }
  *     responses:
- *       201:
- *         description: Пользователь успешно создан
- *       400:
- *         description: Ошибка валидации или email уже существует
+ *       201: { description: "Пользователь создан" }
+ *       400: { description: "Ошибка валидации" }
  */
 app.post('/api/auth/register', async (req, res) => {
     const { email, first_name, last_name, password } = req.body;
 
-    // Проверка обязательных полей
     if (!email || !first_name || !last_name || !password) {
-        return res.status(400).json({ 
-            error: "email, first_name, last_name and password are required" 
+        return res.status(400).json({
+            error: "email, first_name, last_name and password are required"
         });
     }
 
-    // Проверка, существует ли уже пользователь с таким email
-    const existingUser = users.find(u => u.email === email);
+    const existingUser = findUserByEmail(email);
     if (existingUser) {
         return res.status(400).json({ error: "User with this email already exists" });
     }
 
-    // Хешируем пароль
     const hashedPassword = await hashPassword(password);
 
-    // Создаем нового пользователя
     const newUser = {
         id: nanoid(6),
         email: email.toLowerCase(),
@@ -397,7 +364,6 @@ app.post('/api/auth/register', async (req, res) => {
 
     users.push(newUser);
 
-    // Отправляем ответ (без пароля)
     res.status(201).json({
         id: newUser.id,
         email: newUser.email,
@@ -410,7 +376,7 @@ app.post('/api/auth/register', async (req, res) => {
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Вход в систему (возвращает JWT токен)
+ *     summary: Вход в систему (возвращает access и refresh токены)
  *     tags: [Auth]
  *     security: []
  *     requestBody:
@@ -419,30 +385,18 @@ app.post('/api/auth/register', async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - email
- *               - password
+ *             required: [email, password]
  *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "ivan@example.com"
- *               password:
- *                 type: string
- *                 example: "qwerty123"
+ *               email: { type: string, example: "user@example.com" }
+ *               password: { type: string, example: "qwerty123" }
  *     responses:
  *       200:
- *         description: Успешный вход, возвращает JWT токен
+ *         description: Успешный вход
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
- *       400:
- *         description: Отсутствуют обязательные поля
- *       401:
- *         description: Неверный пароль
- *       404:
- *         description: Пользователь не найден
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401: { description: "Неверные данные" }
  */
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
@@ -451,32 +405,125 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(400).json({ error: "email and password are required" });
     }
 
-    const user = users.find(u => u.email === email.toLowerCase());
+    const user = findUserByEmail(email.toLowerCase());
     if (!user) {
         return res.status(404).json({ error: "User not found" });
     }
 
-    const isPasswordValid = await verifyPassword(password, user.hashedPassword);
-    
-    if (isPasswordValid) {
-        // Создаем JWT токен с данными пользователя
-        const accessToken = jwt.sign(
-            { 
-                sub: user.id,
-                email: user.email,
-                first_name: user.first_name,
-                last_name: user.last_name
-            },
-            JWT_SECRET,
-            { expiresIn: ACCESS_EXPIRES_IN }
-        );
-        
-        res.status(200).json({ 
-            accessToken: accessToken
-        });
-    } else {
-        res.status(401).json({ error: "Invalid credentials" });
+    const isValid = await verifyPassword(password, user.hashedPassword);
+    if (!isValid) {
+        return res.status(401).json({ error: "Invalid credentials" });
     }
+
+    // Генерируем оба токена
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    // Сохраняем refresh-токен в хранилище
+    refreshTokens.add(refreshToken);
+
+    res.json({
+        accessToken: accessToken,
+        refreshToken: refreshToken
+    });
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Обновление токенов (получение новой пары access/refresh)
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshRequest'
+ *     responses:
+ *       200:
+ *         description: Новая пара токенов
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400: { description: "Отсутствует refreshToken" }
+ *       401: { description: "Невалидный или истекший refresh-токен" }
+ */
+app.post('/api/auth/refresh', (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: "refreshToken is required" });
+    }
+
+    // Проверяем, существует ли токен в хранилище
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
+    try {
+        // Верифицируем refresh-токен
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+
+        // Находим пользователя
+        const user = findUserById(payload.sub);
+        if (!user) {
+            return res.status(401).json({ error: "User not found" });
+        }
+
+        // Удаляем старый refresh-токен (ротация)
+        refreshTokens.delete(refreshToken);
+
+        // Генерируем новую пару токенов
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+
+        // Сохраняем новый refresh-токен
+        refreshTokens.add(newRefreshToken);
+
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
+        });
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            // Удаляем истекший токен из хранилища
+            refreshTokens.delete(refreshToken);
+            return res.status(401).json({ error: "Refresh token expired" });
+        }
+        return res.status(401).json({ error: "Invalid refresh token" });
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Выход из системы (удаление refresh-токена)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshRequest'
+ *     responses:
+ *       200: { description: "Успешный выход" }
+ *       400: { description: "Отсутствует refreshToken" }
+ */
+app.post('/api/auth/logout', (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: "refreshToken is required" });
+    }
+
+    // Удаляем токен из хранилища
+    refreshTokens.delete(refreshToken);
+
+    res.json({ message: "Logged out successfully" });
 });
 
 /**
@@ -485,30 +532,23 @@ app.post('/api/auth/login', async (req, res) => {
  *   get:
  *     summary: Получить информацию о текущем пользователе
  *     tags: [Auth]
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Данные текущего пользователя
+ *         description: Данные пользователя
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/User'
- *       401:
- *         description: Не авторизован (нет или неверный токен)
- *       404:
- *         description: Пользователь не найден
+ *       401: { description: "Не авторизован" }
  */
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-    // sub мы положили в токен при login
     const userId = req.user.sub;
-    const user = users.find(u => u.id === userId);
-    
+    const user = findUserById(userId);
+
     if (!user) {
         return res.status(404).json({ error: "User not found" });
     }
-    
-    // Никогда не возвращаем hashedPassword
+
     res.json({
         id: user.id,
         email: user.email,
@@ -518,14 +558,14 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 });
 
 // ===========================================
-// CRUD ДЛЯ ТОВАРОВ (ОТКРЫТЫЙ ДОСТУП)
+// CRUD ДЛЯ ТОВАРОВ (без изменений)
 // ===========================================
 
 /**
  * @swagger
  * /api/products:
  *   post:
- *     summary: Создание нового товара
+ *     summary: Создание товара
  *     tags: [Products]
  *     security: []
  *     requestBody:
@@ -534,33 +574,22 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - title
- *               - price
+ *             required: [title, price]
  *             properties:
- *               title:
- *                 type: string
- *                 example: "Новая гитара"
- *               category:
- *                 type: string
- *                 example: "Гитары"
- *               description:
- *                 type: string
- *                 example: "Описание"
- *               price:
- *                 type: number
- *                 example: 15000
+ *               title: { type: string, example: "Новая гитара" }
+ *               category: { type: string, example: "Гитары" }
+ *               description: { type: string, example: "Описание" }
+ *               price: { type: number, example: 15000 }
  *     responses:
- *       201:
- *         description: Товар создан
+ *       201: { description: "Товар создан" }
  */
 app.post('/api/products', (req, res) => {
     const { title, category, description, price } = req.body;
-    
+
     if (!title || !price) {
         return res.status(400).json({ error: 'Title and price are required' });
     }
-    
+
     const newProduct = {
         id: nanoid(6),
         title: title.trim(),
@@ -568,7 +597,7 @@ app.post('/api/products', (req, res) => {
         description: description || '',
         price: Number(price)
     };
-    
+
     products.push(newProduct);
     res.status(201).json(newProduct);
 });
@@ -581,8 +610,7 @@ app.post('/api/products', (req, res) => {
  *     tags: [Products]
  *     security: []
  *     responses:
- *       200:
- *         description: Список товаров
+ *       200: { description: "Список товаров" }
  */
 app.get('/api/products', (req, res) => {
     res.json(products);
@@ -599,13 +627,10 @@ app.get('/api/products', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     responses:
- *       200:
- *         description: Данные товара
- *       404:
- *         description: Товар не найден
+ *       200: { description: "Данные товара" }
+ *       404: { description: "Товар не найден" }
  */
 app.get('/api/products/:id', (req, res) => {
     const id = req.params.id;
@@ -618,62 +643,53 @@ app.get('/api/products/:id', (req, res) => {
  * @swagger
  * /api/products/{id}:
  *   put:
- *     summary: Полное обновление товара
+ *     summary: Обновление товара
  *     tags: [Products]
  *     security: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - title
- *               - price
+ *             required: [title, price]
  *             properties:
- *               title:
- *                 type: string
- *               category:
- *                 type: string
- *               description:
- *                 type: string
- *               price:
- *                 type: number
+ *               title: { type: string }
+ *               category: { type: string }
+ *               description: { type: string }
+ *               price: { type: number }
  *     responses:
- *       200:
- *         description: Обновленный товар
- *       404:
- *         description: Товар не найден
+ *       200: { description: "Обновленный товар" }
+ *       404: { description: "Товар не найден" }
  */
 app.put('/api/products/:id', (req, res) => {
     const id = req.params.id;
-    const productIndex = products.findIndex(p => p.id === id);
-    
-    if (productIndex === -1) {
+    const index = products.findIndex(p => p.id === id);
+
+    if (index === -1) {
         return res.status(404).json({ error: "Product not found" });
     }
-    
+
     const { title, category, description, price } = req.body;
-    
+
     if (!title || !price) {
         return res.status(400).json({ error: 'Title and price are required' });
     }
-    
-    products[productIndex] = {
+
+    products[index] = {
         id,
         title: title.trim(),
-        category: category || products[productIndex].category,
-        description: description || products[productIndex].description,
+        category: category || products[index].category,
+        description: description || products[index].description,
         price: Number(price)
     };
-    
-    res.json(products[productIndex]);
+
+    res.json(products[index]);
 });
 
 /**
@@ -687,24 +703,21 @@ app.put('/api/products/:id', (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     responses:
- *       204:
- *         description: Товар успешно удален
- *       404:
- *         description: Товар не найден
+ *       204: { description: "Товар удален" }
+ *       404: { description: "Товар не найден" }
  */
 app.delete('/api/products/:id', (req, res) => {
     const id = req.params.id;
     const initialLength = products.length;
-    
+
     products = products.filter(p => p.id !== id);
-    
+
     if (products.length === initialLength) {
         return res.status(404).json({ error: "Product not found" });
     }
-    
+
     res.status(204).send();
 });
 
@@ -722,14 +735,17 @@ app.use((err, req, res, next) => {
 // Запуск сервера
 app.listen(port, () => {
     console.log('\n' + '='.repeat(60));
-    console.log('🚀 MUSIC STORE API WITH JWT ЗАПУЩЕН!');
+    console.log('🚀 MUSIC STORE API WITH REFRESH TOKENS ЗАПУЩЕН!');
     console.log('='.repeat(60));
     console.log(`📡 API: http://localhost:${port}/api/products`);
     console.log(`🔐 Auth:`);
-    console.log(`   POST   /api/auth/register - регистрация`);
-    console.log(`   POST   /api/auth/login    - вход (возвращает JWT)`);
-    console.log(`   GET    /api/auth/me       - получить текущего пользователя (требует токен)`);
+    console.log(`   POST   /api/auth/register  - регистрация`);
+    console.log(`   POST   /api/auth/login     - вход (возвращает access + refresh)`);
+    console.log(`   POST   /api/auth/refresh   - обновление токенов`);
+    console.log(`   POST   /api/auth/logout    - выход (удаление refresh)`);
+    console.log(`   GET    /api/auth/me        - текущий пользователь`);
+    console.log(`⏱️  Access токен живет: ${ACCESS_EXPIRES_IN}`);
+    console.log(`⏱️  Refresh токен живет: ${REFRESH_EXPIRES_IN}`);
     console.log(`📚 Swagger: http://localhost:${port}/api-docs`);
-    console.log(`⏱️  Токен живет: ${ACCESS_EXPIRES_IN}`);
     console.log('='.repeat(60) + '\n');
 });

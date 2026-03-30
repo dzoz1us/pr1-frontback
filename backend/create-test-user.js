@@ -3,9 +3,9 @@ const bcrypt = require('bcrypt');
 async function createTestUser() {
     const password = 'admin123';
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     console.log('='.repeat(60));
-    console.log('🔐 ТЕСТОВЫЙ ПОЛЬЗОВАТЕЛЬ ДЛЯ JWT');
+    console.log('🔐 ТЕСТОВЫЙ ПОЛЬЗОВАТЕЛЬ');
     console.log('='.repeat(60));
     console.log('📧 Email:    admin@musicstore.com');
     console.log('🔑 Password: admin123');
