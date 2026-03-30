@@ -71,4 +71,4 @@
 
 
 ## Получение товара по ID
-![](screenshots/pr5-screen4.png .png)
+![](screenshots/pr5-screen4.png.png)
