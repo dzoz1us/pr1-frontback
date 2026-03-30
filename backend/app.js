@@ -1,6 +1,7 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');  // НОВАЯ БИБЛИОТЕКА
 const cors = require('cors');
 const path = require('path');
 
@@ -10,6 +11,10 @@ const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 const port = 3000;
+
+// Секретный ключ для подписи JWT (в реальном проекте хранить в .env)
+const JWT_SECRET = 'music_store_secret_key_2024';
+const ACCESS_EXPIRES_IN = '15m';  // Токен живет 15 минут
 
 // Настройка CORS для React-клиента
 app.use(cors({
@@ -46,7 +51,7 @@ let users = [
         email: 'admin@musicstore.com',
         first_name: 'Admin',
         last_name: 'User',
-        hashedPassword: '$2b$10$weGAKDkjd6U6RcNegv2QBuJwhb9v4x5HFHi7T/STX8Z4PmCdFZrg6' // password: admin123
+        hashedPassword: '$2b$10$oIsc48/BeRH37Qsl89eco.rlRHtcvVLxAxuKPPrAb4QB/lkYPc1W'  // Будет заполнено после генерации хеша
     }
 ];
 
@@ -143,7 +148,6 @@ async function verifyPassword(password, hashedPassword) {
 function findUserByEmail(email, res) {
     const user = users.find(u => u.email === email);
     if (!user) {
-        res.status(404).json({ error: "User not found" });
         return null;
     }
     return user;
@@ -160,6 +164,38 @@ function findProductOr404(id, res) {
 }
 
 // ===========================================
+// МИДДЛВЭР ДЛЯ ПРОВЕРКИ JWT ТОКЕНА
+// ===========================================
+
+function authMiddleware(req, res, next) {
+    const header = req.headers.authorization || "";
+
+    // Ожидаем формат: Bearer <token>
+    const [scheme, token] = header.split(" ");
+
+    if (scheme !== "Bearer" || !token) {
+        return res.status(401).json({
+            error: "Missing or invalid Authorization header. Expected: Bearer <token>"
+        });
+    }
+
+    try {
+        const payload = jwt.verify(token, JWT_SECRET);
+        // Сохраняем данные токена в req для использования в обработчиках
+        req.user = payload; // { sub, email, first_name, last_name, iat, exp }
+        next();
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({ error: "Token has expired" });
+        }
+        if (err.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: "Invalid token" });
+        }
+        return res.status(401).json({ error: "Invalid or expired token" });
+    }
+}
+
+// ===========================================
 // SWAGGER КОНФИГУРАЦИЯ
 // ===========================================
 
@@ -167,9 +203,9 @@ const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'Music Store API with Authentication',
+            title: 'Music Store API with JWT Authentication',
             version: '2.0.0',
-            description: 'API для музыкального магазина с аутентификацией',
+            description: 'API для музыкального магазина с JWT аутентификацией',
             contact: {
                 name: 'Разработчик',
                 email: 'developer@musicstore.com'
@@ -184,11 +220,25 @@ const swaggerOptions = {
         tags: [
             {
                 name: 'Auth',
-                description: 'Регистрация и вход в систему'
+                description: 'Регистрация, вход и получение информации о пользователе'
             },
             {
                 name: 'Products',
                 description: 'Управление товарами'
+            }
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            }
+        },
+        security: [
+            {
+                bearerAuth: []
             }
         ]
     },
@@ -198,7 +248,7 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
-    customSiteTitle: 'Music Store API with Auth'
+    customSiteTitle: 'Music Store API with JWT'
 }));
 
 // ===========================================
@@ -234,10 +284,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *           type: string
  *           description: Фамилия
  *           example: "Петров"
- *         password:
- *           type: string
- *           description: Пароль (не возвращается в ответах)
- *           example: "qwerty123"
  *     Product:
  *       type: object
  *       required:
@@ -267,20 +313,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *     LoginResponse:
  *       type: object
  *       properties:
- *         success:
- *           type: boolean
- *           example: true
- *         user:
- *           type: object
- *           properties:
- *             id:
- *               type: string
- *             email:
- *               type: string
- *             first_name:
- *               type: string
- *             last_name:
- *               type: string
+ *         accessToken:
+ *           type: string
+ *           description: JWT токен доступа
+ *           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *     Error:
  *       type: object
  *       properties:
@@ -290,7 +326,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  */
 
 // ===========================================
-// АУТЕНТИФИКАЦИЯ (НОВЫЕ МАРШРУТЫ)
+// АУТЕНТИФИКАЦИЯ (с JWT)
 // ===========================================
 
 /**
@@ -299,6 +335,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *   post:
  *     summary: Регистрация нового пользователя
  *     tags: [Auth]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -327,25 +364,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *     responses:
  *       201:
  *         description: Пользователь успешно создан
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 first_name:
- *                   type: string
- *                 last_name:
- *                   type: string
  *       400:
  *         description: Ошибка валидации или email уже существует
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
 app.post('/api/auth/register', async (req, res) => {
     const { email, first_name, last_name, password } = req.body;
@@ -390,8 +410,9 @@ app.post('/api/auth/register', async (req, res) => {
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Вход в систему
+ *     summary: Вход в систему (возвращает JWT токен)
  *     tags: [Auth]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -411,7 +432,7 @@ app.post('/api/auth/register', async (req, res) => {
  *                 example: "qwerty123"
  *     responses:
  *       200:
- *         description: Успешный вход
+ *         description: Успешный вход, возвращает JWT токен
  *         content:
  *           application/json:
  *             schema:
@@ -438,22 +459,66 @@ app.post('/api/auth/login', async (req, res) => {
     const isPasswordValid = await verifyPassword(password, user.hashedPassword);
     
     if (isPasswordValid) {
-        res.status(200).json({ 
-            success: true,
-            user: {
-                id: user.id,
+        // Создаем JWT токен с данными пользователя
+        const accessToken = jwt.sign(
+            { 
+                sub: user.id,
                 email: user.email,
                 first_name: user.first_name,
                 last_name: user.last_name
-            }
+            },
+            JWT_SECRET,
+            { expiresIn: ACCESS_EXPIRES_IN }
+        );
+        
+        res.status(200).json({ 
+            accessToken: accessToken
         });
     } else {
-        res.status(401).json({ error: "Invalid password" });
+        res.status(401).json({ error: "Invalid credentials" });
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/me:
+ *   get:
+ *     summary: Получить информацию о текущем пользователе
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Данные текущего пользователя
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Не авторизован (нет или неверный токен)
+ *       404:
+ *         description: Пользователь не найден
+ */
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+    // sub мы положили в токен при login
+    const userId = req.user.sub;
+    const user = users.find(u => u.id === userId);
+    
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+    
+    // Никогда не возвращаем hashedPassword
+    res.json({
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name
+    });
+});
+
 // ===========================================
-// CRUD ДЛЯ ТОВАРОВ (АДАПТИРОВАННЫЙ)
+// CRUD ДЛЯ ТОВАРОВ (ОТКРЫТЫЙ ДОСТУП)
 // ===========================================
 
 /**
@@ -462,6 +527,7 @@ app.post('/api/auth/login', async (req, res) => {
  *   post:
  *     summary: Создание нового товара
  *     tags: [Products]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -487,12 +553,6 @@ app.post('/api/auth/login', async (req, res) => {
  *     responses:
  *       201:
  *         description: Товар создан
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Product'
- *       400:
- *         description: Ошибка валидации
  */
 app.post('/api/products', (req, res) => {
     const { title, category, description, price } = req.body;
@@ -519,15 +579,10 @@ app.post('/api/products', (req, res) => {
  *   get:
  *     summary: Получение всех товаров
  *     tags: [Products]
+ *     security: []
  *     responses:
  *       200:
  *         description: Список товаров
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Product'
  */
 app.get('/api/products', (req, res) => {
     res.json(products);
@@ -539,6 +594,7 @@ app.get('/api/products', (req, res) => {
  *   get:
  *     summary: Получение товара по ID
  *     tags: [Products]
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -548,10 +604,6 @@ app.get('/api/products', (req, res) => {
  *     responses:
  *       200:
  *         description: Данные товара
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Product'
  *       404:
  *         description: Товар не найден
  */
@@ -568,6 +620,7 @@ app.get('/api/products/:id', (req, res) => {
  *   put:
  *     summary: Полное обновление товара
  *     tags: [Products]
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -595,8 +648,6 @@ app.get('/api/products/:id', (req, res) => {
  *     responses:
  *       200:
  *         description: Обновленный товар
- *       400:
- *         description: Ошибка валидации
  *       404:
  *         description: Товар не найден
  */
@@ -631,6 +682,7 @@ app.put('/api/products/:id', (req, res) => {
  *   delete:
  *     summary: Удаление товара
  *     tags: [Products]
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -670,18 +722,14 @@ app.use((err, req, res, next) => {
 // Запуск сервера
 app.listen(port, () => {
     console.log('\n' + '='.repeat(60));
-    console.log('🚀 MUSIC STORE API WITH AUTH ЗАПУЩЕН!');
+    console.log('🚀 MUSIC STORE API WITH JWT ЗАПУЩЕН!');
     console.log('='.repeat(60));
     console.log(`📡 API: http://localhost:${port}/api/products`);
-    console.log(`🔐 Auth: http://localhost:${port}/api/auth/register | /api/auth/login`);
+    console.log(`🔐 Auth:`);
+    console.log(`   POST   /api/auth/register - регистрация`);
+    console.log(`   POST   /api/auth/login    - вход (возвращает JWT)`);
+    console.log(`   GET    /api/auth/me       - получить текущего пользователя (требует токен)`);
     console.log(`📚 Swagger: http://localhost:${port}/api-docs`);
-    console.log('\n📦 Доступные эндпоинты:');
-    console.log('   POST   /api/auth/register    - регистрация');
-    console.log('   POST   /api/auth/login       - вход');
-    console.log('   POST   /api/products          - создать товар');
-    console.log('   GET    /api/products          - все товары');
-    console.log('   GET    /api/products/:id      - товар по ID');
-    console.log('   PUT    /api/products/:id      - обновить товар');
-    console.log('   DELETE /api/products/:id      - удалить товар');
+    console.log(`⏱️  Токен живет: ${ACCESS_EXPIRES_IN}`);
     console.log('='.repeat(60) + '\n');
 });
