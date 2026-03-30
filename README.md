@@ -114,3 +114,34 @@
 
 ## Получение информации (c JWT)
 ![](screenshots/pr8-screen5.png)
+
+
+
+# Практика 9
+## Регистрация пользователя
+![](screenshots/pr9-screen1.png)
+
+
+
+## Вход в систему (получение access и refresh токенов)
+![](screenshots/pr9-screen2.png)
+
+
+
+## Обновление токенов
+![](screenshots/pr9-screen3.png)
+
+
+
+## Попытка обновить токен повторно
+![](screenshots/pr9-screen4.png)
+
+
+
+## Выход из системы
+![](screenshots/pr9-screen5.png)
+
+
+
+## Получение информации о пользователе (с access-токеном)
+![](screenshots/pr9-screen6.png)
